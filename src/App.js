@@ -60,6 +60,15 @@ function Home() {
   const setDomEditorRef = ref => (domEditor = ref);
   const focus = () => domEditor.focus();
 
+  //Block styling
+  const myBlockStyleFunc = contentBlock => {
+    const type = contentBlock.getType();
+    console.log("type", type);
+    if (type === "code-block") {
+      return "superFancyBlockquote";
+    }
+  };
+
   return (
     <AppContainer>
       <EditorContainer>
@@ -71,6 +80,7 @@ function Home() {
             keyBindingFn={myKeybindingFn}
             onChange={onChange}
             ref={setDomEditorRef}
+            blockStyleFn={myBlockStyleFunc}
           />
         </EditorWrapper>
       </EditorContainer>
