@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { Editor, EditorState, RichUtils, CompositeDecorator } from "draft-js";
+import {
+  Editor,
+  EditorState,
+  RichUtils,
+  CompositeDecorator,
+  getDefaultKeyBinding,
+  KeyBindingUtil
+} from "draft-js";
 import styled from "styled-components";
 
 import Inspector, { MyEditorInspector } from "./Inspector";
@@ -13,6 +20,16 @@ const compositDecorator = new CompositeDecorator([
   { strategy: hashtagStrategy, component: HashTagSpan }
 ]);
 
+//Custom Key bindings
+const { hasCommandModifier } = KeyBindingUtil;
+
+const myKeybindingFn = e => {
+  if (e.keyCode === 83 && hasCommandModifier(e)) {
+    return "myeditor-save";
+  }
+  return getDefaultKeyBinding(e);
+};
+
 function Home() {
   //Basic setting of editorState and onChange
   const [editorState, setEditorState] = useState(
@@ -23,6 +40,10 @@ function Home() {
   //Using HandleKeyCommand
   const handleKeyCommand = (command, editorState) => {
     const newState = RichUtils.handleKeyCommand(editorState, command);
+
+    if (command === "myeditor-save") {
+      console.log("saved!");
+    }
 
     if (newState) {
       onChange(newState);
@@ -42,6 +63,7 @@ function Home() {
           <Editor
             editorState={editorState}
             handleKeyCommand={handleKeyCommand}
+            keyBindingFn={myKeybindingFn}
             onChange={onChange}
           />
         </EditorWrapper>
