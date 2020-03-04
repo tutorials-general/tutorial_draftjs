@@ -55,16 +55,22 @@ function Home() {
   const handleBold = () =>
     onChange(RichUtils.toggleInlineStyle(editorState, "BOLD"));
 
+  //Managing Focus
+  let domEditor;
+  const setDomEditorRef = ref => (domEditor = ref);
+  const focus = () => domEditor.focus();
+
   return (
     <AppContainer>
       <EditorContainer>
         <button onClick={handleBold}>bold</button>
-        <EditorWrapper>
+        <EditorWrapper onClick={focus}>
           <Editor
             editorState={editorState}
             handleKeyCommand={handleKeyCommand}
             keyBindingFn={myKeybindingFn}
             onChange={onChange}
+            ref={setDomEditorRef}
           />
         </EditorWrapper>
       </EditorContainer>
@@ -90,6 +96,7 @@ const EditorContainer = styled.div`
 const EditorWrapper = styled.div`
   margin: 10px;
   width: 500px;
+  height: 500px;
   background-color: white;
 `;
 
