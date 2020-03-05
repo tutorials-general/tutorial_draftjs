@@ -5,14 +5,17 @@ import {
   RichUtils,
   CompositeDecorator,
   getDefaultKeyBinding,
-  KeyBindingUtil
+  KeyBindingUtil,
+  DefaultDraftBlockRenderMap
 } from "draft-js";
 import styled from "styled-components";
+import Immutable from "immutable";
 
 import Inspector, { MyEditorInspector } from "./Inspector";
 import HandleSpan from "./components/HandleSpan";
 import HashTagSpan from "./components/HashTagSpan";
 import { handleStrategy, hashtagStrategy } from "./utils/strategy";
+import MyCustomBlock from "./components/MyCustomBlock";
 
 //Decorator with CompositDecorator
 const compositDecorator = new CompositeDecorator([
@@ -69,6 +72,26 @@ function Home() {
     }
   };
 
+  //Custom Block Rendering
+  const blockRenderMap = Immutable.Map({
+    // unstyled: {//1. type 이 unstyled 일 경우,
+    //   element: "h2" //2. h2 element 로 랜더링 한다.
+    // },
+    section: {
+      // 1. type 이 section 일 경우,
+      element: "section" //2. section element 로 렌더링 한다.
+    },
+    "code-block": {
+      // 1. type 이 code-block 일 경우,
+      element: "pre", // 2. element 는 pre 로 렌더링 하고
+      wrapper: <MyCustomBlock /> // 3. 각 element 들은 MyCoustomBlock 으로 감싼다.
+    }
+  });
+
+  const extendedBlockRenderMap = DefaultDraftBlockRenderMap.merge(
+    blockRenderMap
+  );
+
   return (
     <AppContainer>
       <EditorContainer>
@@ -81,6 +104,7 @@ function Home() {
             onChange={onChange}
             ref={setDomEditorRef}
             blockStyleFn={myBlockStyleFunc}
+            blockRenderMap={extendedBlockRenderMap}
           />
         </EditorWrapper>
       </EditorContainer>
