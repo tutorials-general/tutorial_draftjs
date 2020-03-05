@@ -9,6 +9,16 @@ export function hashtagStrategy(contentBlock, callback, contentState) {
   findWithRegex(HASHTAG_REGEX, contentBlock, callback);
 }
 
+export function findLinkEntites(contentBlock, callback, contentState) {
+  contentBlock.findEntityRanges(character => {
+    const entityKey = character.getEntity();
+    return (
+      entityKey !== null &&
+      contentState.getEntity(entityKey).getType() === "LINK"
+    );
+  }, callback);
+}
+
 function findWithRegex(regex, contentBlock, callback) {
   const text = contentBlock.getText();
   let matchArr, start;

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Editor,
   EditorState,
@@ -14,13 +14,20 @@ import Immutable from "immutable";
 import Inspector, { MyEditorInspector } from "./Inspector";
 import HandleSpan from "./components/HandleSpan";
 import HashTagSpan from "./components/HashTagSpan";
-import { handleStrategy, hashtagStrategy } from "./utils/strategy";
+import {
+  handleStrategy,
+  hashtagStrategy,
+  findLinkEntites
+} from "./utils/strategy";
 import MyCustomBlock from "./components/MyCustomBlock";
+import Link from "./components/Link";
+import UrlInput from "./components/UrlInput";
 
 //Decorator with CompositDecorator
 const compositDecorator = new CompositeDecorator([
   { strategy: handleStrategy, component: HandleSpan },
-  { strategy: hashtagStrategy, component: HashTagSpan }
+  { strategy: hashtagStrategy, component: HashTagSpan },
+  { strategy: findLinkEntites, component: Link }
 ]);
 
 //Custom Key bindings
@@ -38,6 +45,17 @@ function Home() {
   const [editorState, setEditorState] = useState(
     EditorState.createEmpty(compositDecorator)
   );
+  const [showUrlInput, setShowUrlIput] = useState(false);
+  const [url, setUrl] = useState("");
+  const domEditor = useRef(null);
+  const urlInput = useRef(null);
+
+  useEffect(() => {
+    domEditor.current && domEditor.current.focus();
+
+    showUrlInput && urlInput.current && urlInput.current.focus();
+  }, [domEditor, showUrlInput]);
+
   const onChange = editorState => setEditorState(editorState);
 
   //Using HandleKeyCommand
@@ -59,14 +77,11 @@ function Home() {
     onChange(RichUtils.toggleInlineStyle(editorState, "BOLD"));
 
   //Managing Focus
-  let domEditor;
-  const setDomEditorRef = ref => (domEditor = ref);
-  const focus = () => domEditor.focus();
+  const focus = () => domEditor.current.focus();
 
   //Block styling
   const myBlockStyleFunc = contentBlock => {
     const type = contentBlock.getType();
-    console.log("type", type);
     if (type === "code-block") {
       return "superFancyBlockquote";
     }
@@ -92,17 +107,83 @@ function Home() {
     blockRenderMap
   );
 
+  //Link entites
+  const promptForLink = e => {
+    e.preventDefault();
+    const selection = editorState.getSelection();
+    console.log("selection", selection);
+    if (!selection.isCollapsed()) {
+      const contentState = editorState.getCurrentContent();
+      const startKey = selection.getStartKey();
+      console.log("startKey", startKey);
+      const startOffset = selection.getStartOffset();
+      console.log("startOffset", startOffset);
+      const blockWithLinkAtBeginning = contentState.getBlockForKey(startKey);
+      const linkKey = blockWithLinkAtBeginning.getEntityAt(startOffset);
+
+      let url = "";
+      if (linkKey) {
+        const linkInstance = contentState.getEntity(linkKey);
+        console.log("linkInstance", linkInstance);
+        url = linkInstance.getData().url;
+      }
+
+      setShowUrlIput(true);
+      setUrl(url);
+      setTimeout(() => urlInput.current && urlInput.current.focus(), 0);
+    }
+  };
+
+  const onConfirmLink = e => {
+    e.preventDefault();
+    const contentState = editorState.getCurrentContent();
+    const contentStateWithEntity = contentState.createEntity(
+      "LINK",
+      "MUTABLE",
+      { url: url }
+    );
+
+    const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
+    console.log("LastCreatedEntityKey", entityKey);
+
+    const newEditorState = EditorState.set(editorState, {
+      currentContent: contentStateWithEntity
+    });
+    setEditorState(
+      RichUtils.toggleLink(
+        newEditorState,
+        newEditorState.getSelection(),
+        entityKey
+      )
+    );
+    setShowUrlIput(false);
+    setUrl("");
+  };
+  let urlInputComp;
+  if (showUrlInput) {
+    urlInputComp = (
+      <UrlInput
+        value={url}
+        onChange={e => setUrl(e.target.value)}
+        urlInput={urlInput}
+        onConfirmLink={onConfirmLink}
+      />
+    );
+  }
+
   return (
     <AppContainer>
       <EditorContainer>
         <button onClick={handleBold}>bold</button>
+        <button onClick={promptForLink}>link</button>
+        {urlInputComp}
         <EditorWrapper onClick={focus}>
           <Editor
             editorState={editorState}
             handleKeyCommand={handleKeyCommand}
             keyBindingFn={myKeybindingFn}
             onChange={onChange}
-            ref={setDomEditorRef}
+            ref={domEditor}
             blockStyleFn={myBlockStyleFunc}
             blockRenderMap={extendedBlockRenderMap}
           />
