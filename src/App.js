@@ -6,8 +6,10 @@ import {
   CompositeDecorator,
   getDefaultKeyBinding,
   KeyBindingUtil,
-  DefaultDraftBlockRenderMap
+  DefaultDraftBlockRenderMap,
+  AtomicBlockUtils
 } from "draft-js";
+
 import styled from "styled-components";
 import Immutable from "immutable";
 
@@ -19,9 +21,13 @@ import {
   hashtagStrategy,
   findLinkEntites
 } from "./utils/strategy";
+import { getPromptForLink, getOnConfirmLink } from "./utils/Link";
 import MyCustomBlock from "./components/MyCustomBlock";
 import Link from "./components/Link";
 import UrlInput from "./components/UrlInput";
+import UrlInputMedia from "./components/UrlInputMedia";
+import Media from "./components/Media";
+import SideBarButton from "./components/SideBarButton";
 
 //Decorator with CompositDecorator
 const compositDecorator = new CompositeDecorator([
@@ -45,16 +51,39 @@ function Home() {
   const [editorState, setEditorState] = useState(
     EditorState.createEmpty(compositDecorator)
   );
+  const [urlLink, setUrlLink] = useState("");
   const [showUrlInput, setShowUrlIput] = useState(false);
-  const [url, setUrl] = useState("");
+
+  const [urlMedia, setUrlMedia] = useState("");
+  const [urlMediaType, setUrlMediaType] = useState("");
+  const [showUrlInputMedia, setShowUrlInputMedia] = useState(false);
+  const [isSelection, setIsSelection] = useState(false);
+
   const domEditor = useRef(null);
   const urlInput = useRef(null);
+  const urlInputMedia = useRef(null);
 
   useEffect(() => {
     domEditor.current && domEditor.current.focus();
 
     showUrlInput && urlInput.current && urlInput.current.focus();
-  }, [domEditor, showUrlInput]);
+
+    showUrlInputMedia && urlInputMedia.current && urlInputMedia.current.focus();
+  }, [domEditor, showUrlInput, showUrlInputMedia]);
+
+  useEffect(() => {
+    const selection = editorState.getSelection();
+    console.log("selection", selection);
+    if (
+      selection &&
+      (selection.getFocusOffset() !== selection.getAnchorOffset() ||
+        selection.getAnchorKey() !== selection.getFocusKey())
+    ) {
+      setIsSelection(true);
+    } else {
+      setIsSelection(false);
+    }
+  }, [editorState]);
 
   const onChange = editorState => setEditorState(editorState);
 
@@ -108,65 +137,83 @@ function Home() {
   );
 
   //Link entites
-  const promptForLink = e => {
-    e.preventDefault();
-    const selection = editorState.getSelection();
-    console.log("selection", selection);
-    if (!selection.isCollapsed()) {
-      const contentState = editorState.getCurrentContent();
-      const startKey = selection.getStartKey();
-      console.log("startKey", startKey);
-      const startOffset = selection.getStartOffset();
-      console.log("startOffset", startOffset);
-      const blockWithLinkAtBeginning = contentState.getBlockForKey(startKey);
-      const linkKey = blockWithLinkAtBeginning.getEntityAt(startOffset);
+  const promptForLink = getPromptForLink({
+    editorState,
+    setShowUrlIput,
+    setUrlLink,
+    urlInput
+  });
+  const onConfirmLink = getOnConfirmLink({
+    editorState,
+    setEditorState,
+    setShowUrlIput,
+    setUrlLink,
+    urlLink
+  });
 
-      let url = "";
-      if (linkKey) {
-        const linkInstance = contentState.getEntity(linkKey);
-        console.log("linkInstance", linkInstance);
-        url = linkInstance.getData().url;
-      }
-
-      setShowUrlIput(true);
-      setUrl(url);
-      setTimeout(() => urlInput.current && urlInput.current.focus(), 0);
-    }
-  };
-
-  const onConfirmLink = e => {
-    e.preventDefault();
-    const contentState = editorState.getCurrentContent();
-    const contentStateWithEntity = contentState.createEntity(
-      "LINK",
-      "MUTABLE",
-      { url: url }
-    );
-
-    const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
-    console.log("LastCreatedEntityKey", entityKey);
-
-    const newEditorState = EditorState.set(editorState, {
-      currentContent: contentStateWithEntity
-    });
-    setEditorState(
-      RichUtils.toggleLink(
-        newEditorState,
-        newEditorState.getSelection(),
-        entityKey
-      )
-    );
-    setShowUrlIput(false);
-    setUrl("");
-  };
   let urlInputComp;
   if (showUrlInput) {
     urlInputComp = (
       <UrlInput
-        value={url}
-        onChange={e => setUrl(e.target.value)}
+        value={urlLink}
+        onChange={e => setUrlLink(e.target.value)}
         urlInput={urlInput}
-        onConfirmLink={onConfirmLink}
+        onConfirm={onConfirmLink}
+      />
+    );
+  }
+
+  //Media entities
+  const promptForMedia = type => {
+    console.log("promt seted type", type);
+    setUrlMediaType(type);
+    setUrlMedia("");
+    setShowUrlInputMedia(true);
+  };
+
+  console.log("urlMediaType", urlMediaType);
+
+  const addAudio = () => promptForMedia("audio");
+  const addImage = () => promptForMedia("image");
+  const addVideo = () => promptForMedia("video");
+
+  const onConfirmMedia = e => {
+    e.preventDefault();
+    const contentState = editorState.getCurrentContent();
+    const contentStateWithEntity = contentState.createEntity(
+      urlMediaType,
+      "IMMUTABLE",
+      { src: urlMedia }
+    );
+    const entityKey = contentStateWithEntity.getLastCreatedEntityKey();
+    const newEditorState = EditorState.set(editorState, {
+      currentContent: contentStateWithEntity
+    });
+    setEditorState(
+      AtomicBlockUtils.insertAtomicBlock(newEditorState, entityKey, " ")
+    );
+    setUrlMedia("");
+    setShowUrlInputMedia(false);
+  };
+
+  const mediaBlockRenderer = block => {
+    if (block.getType() === "atomic") {
+      return {
+        component: Media,
+        editable: false
+      };
+    }
+    return null;
+  };
+
+  let urlInputMediaComp;
+  if (showUrlInputMedia) {
+    urlInputMediaComp = (
+      <UrlInputMedia
+        value={urlMedia}
+        onChange={e => setUrlMedia(e.target.value)}
+        urlInputMedia={urlInputMedia}
+        onConfirm={onConfirmMedia}
       />
     );
   }
@@ -174,9 +221,19 @@ function Home() {
   return (
     <AppContainer>
       <EditorContainer>
-        <button onClick={handleBold}>bold</button>
-        <button onClick={promptForLink}>link</button>
+        {isSelection && (
+          <>
+            <button onClick={handleBold}>bold</button>
+            <button onClick={promptForLink}>link</button>{" "}
+          </>
+        )}
+
+        <button onClick={addAudio}>Add Audio</button>
+        <button onClick={addImage}>Add Image</button>
+        <button onClick={addVideo}>Add Video</button>
+
         {urlInputComp}
+        {urlInputMediaComp}
         <EditorWrapper onClick={focus}>
           <Editor
             editorState={editorState}
@@ -186,10 +243,13 @@ function Home() {
             ref={domEditor}
             blockStyleFn={myBlockStyleFunc}
             blockRenderMap={extendedBlockRenderMap}
+            blockRendererFn={mediaBlockRenderer}
           />
+          {/* following sidebar */}
+          <SideBarButton editorState={editorState} />
         </EditorWrapper>
       </EditorContainer>
-      <Inspector editorState={editorState} />
+      {/* <Inspector editorState={editorState} /> */}
       <MyEditorInspector editorState={editorState} />
     </AppContainer>
   );
@@ -210,9 +270,11 @@ const EditorContainer = styled.div`
 
 const EditorWrapper = styled.div`
   margin: 10px;
-  width: 500px;
+  width: 300px;
   height: 500px;
   background-color: white;
+  position: relative;
+  font-size: 30px;
 `;
 
 export default Home;
